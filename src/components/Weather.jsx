@@ -1,24 +1,59 @@
-import React, { useState } from "react";
-import generateRandomWeatherForCity from "../utils/mockWeatherData";
+import React, { useState, useEffect } from "react";
 
 const Weather = () => {
-  const [city, setCity] = useState("");
+  const [city, setCity] = useState(""); 
   const [weather, setWeather] = useState(null);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(""); 
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+
+  useEffect(() => {
+    const updateOnlineStatus = () => setIsOffline(!navigator.onLine);
+    window.addEventListener('offline', updateOnlineStatus);
+    window.addEventListener('online', updateOnlineStatus);
+    return () => {
+      window.removeEventListener('offline', updateOnlineStatus);
+      window.removeEventListener('online', updateOnlineStatus);
+    };
+  }, []);
 
   const fetchWeather = async () => {
-    try {
-      if (city.trim() === "") throw new Error("City not found");
+    if (!city.trim()) {
+      setError("Please enter a valid city name.");
+      return;
+    }
 
-      setTimeout(() => {
-        const randomWeather = generateRandomWeatherForCity(city);
-        setWeather(randomWeather);
-        setError("");
-      }, 1000);
-      
+    if (isOffline) {
+      const cachedData = localStorage.getItem(city);
+      if (cachedData) {
+        setWeather(JSON.parse(cachedData));
+        setError("You are offline. Showing cached data.");
+      } else {
+        setWeather(null);
+        setError("You are offline and no cached data is available.");
+      }
+      return;
+    }
+
+    const url = `http://localhost:4000/api/weather?city=${city}`;
+
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error("Error fetching data from server.");
+      }
+      const result = await response.json();
+      setWeather(result);
+      localStorage.setItem(city, JSON.stringify(result)); 
+      setError("");
     } catch (err) {
-      setError(err.message);
-      setWeather(null);
+      const cachedData = localStorage.getItem(city);
+      if (cachedData) {
+        setWeather(JSON.parse(cachedData));
+        setError("You are offline. Showing cached data.");
+      } else {
+        setWeather(null);
+        setError("Failed to fetch data, and no cached data is available.");
+      }
     }
   };
 
